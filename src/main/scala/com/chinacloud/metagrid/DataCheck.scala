@@ -20,43 +20,59 @@ import org.apache.spark.sql.{DataFrame, Row, SparkSession, types}
 object DataCheck {
   def main(args: Array[String]) {
 
-    var reg = args(0)
-    var urlSrc = args(1)
-    var taskName = args(2)
-    var table = args(3)
-    var filed = args(4)
-    var userSrc = args(5)
-    var passwdSrc= args(6)
+//    var reg = args(0)
+//    var urlSrc = args(1)
+//    var taskName = args(2)
+//    var table = args(3)
+//    var filed = args(4)
+//    var userSrc = args(5)
+//    var passwdSrc= args(6)
+//
+//    var urlDest = args(7)
+//    var statisticsTable = args(8)
+//    var detailsTable = args(9)
+//    var userDest = args(10)
+//    var passwdDest= args(11)
 
-    var urlDest = args(7)
-    var statisticsTable = args(8)
-    var detailsTable = args(9)
-    var userDest = args(10)
-    var passwdDest= args(11)
+
+        var reg = args(0)
+        var taskName = args(1)
+        var table = args(2)
+        var filed = args(3)
+        var urlDest = args(4)
+        var statisticsTable = args(5)
+        var userDest = args(6)
+        var passwdDest= args(7)
+
+
+
 
     val sparksession = SparkSession
       .builder
       .appName(taskName)
-      .master("local[1]")
+      .enableHiveSupport()
       .getOrCreate()
 
     //获取JobId
     var jobId = sparksession.sparkContext.applicationId
+    var sql:String = "select * from" +" "+ table
+//Mysql数据库
+//    val dataFrame = readMysqlTable(sparksession,urlSrc,table,userSrc,passwdSrc)
+//    var srcdata = dataFrame.select("*")
 
-    val dataFrame = readMysqlTable(sparksession,urlSrc,table,userSrc,passwdSrc)
-
-    val srcdata = dataFrame.select("*")
+//hive
+    val srcdata = sparksession.sql(sql)
 
     var resultMap = regualate(reg,srcdata,filed);
     resultMap +=("taskName"->taskName)
     resultMap +=("jobId"->jobId)
-    writeResultToMysql(sparksession,resultMap,urlDest,statisticsTable,detailsTable,userDest,passwdDest)
+    writeResultToMysql(sparksession,resultMap,urlDest,statisticsTable,userDest,passwdDest)
 
     sparksession.stop()
 
   }
 
-  def writeResultToMysql(sparkSession:SparkSession,resultMap:Map[String,String],urlDestDB:String,statisticsTable:String,detailsTable:String,user:String,passwd:String): Unit =
+  def writeResultToMysql(sparkSession:SparkSession,resultMap:Map[String,String],urlDestDB:String,statisticsTable:String,user:String,passwd:String): Unit =
   {
     var dataLength = resultMap.get("totalCount").map(f=>{
       f.toInt
