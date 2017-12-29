@@ -5,6 +5,7 @@
 package com.chinacloud.metagrid
 
 
+import java.sql.Timestamp
 import java.text.SimpleDateFormat
 import java.util.{Date, Properties}
 
@@ -35,17 +36,14 @@ object DataCheck {
 //    var passwdDest= args(11)
 
 
-        var reg = args(0)
-        var taskName = args(1)
-        var table = args(2)
-        var filed = args(3)
-        var urlDest = args(4)
-        var statisticsTable = args(5)
-        var userDest = args(6)
-        var passwdDest= args(7)
-
-
-
+    var reg = args(0)
+    var taskName = args(1)
+    var table = args(2)
+    var filed = args(3)
+    var urlDest = args(4)
+    var statisticsTable = args(5)
+    var userDest = args(6)
+    var passwdDest= args(7)
 
     val sparksession = SparkSession
       .builder
@@ -56,11 +54,12 @@ object DataCheck {
     //获取JobId
     var jobId = sparksession.sparkContext.applicationId
     var sql:String = "select * from" +" "+ table
-//Mysql数据库
+
+    //读取Mysql数据库
 //    val dataFrame = readMysqlTable(sparksession,urlSrc,table,userSrc,passwdSrc)
 //    var srcdata = dataFrame.select("*")
 
-//hive
+    //读取hive数据库
     val srcdata = sparksession.sql(sql)
 
     var resultMap = regualate(reg,srcdata,filed);
@@ -93,14 +92,11 @@ object DataCheck {
     var invalidPercent = invalidCount.getOrElse(0)*10000/dataLength
     var nullPercent = nullCount.getOrElse(0)*10000/dataLength
 
+    var ts = new Timestamp(System.currentTimeMillis())
 
-    var now:Date = new Date()
-    var dateFormat:SimpleDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss:SSS")
-    var checktime = dateFormat.format( now )
-
-    var valStr = (taskName.getOrElse("dataquality"),jobId.getOrElse("job_000"),1,"合格",validCount.getOrElse(0),validPercent,checktime)
-    var invalstr = (taskName.getOrElse("dataquality"),jobId.getOrElse("job_000"),0,"不合格",invalidCount.getOrElse(0),invalidPercent,checktime)
-    var nullStr = (taskName.getOrElse("dataquality"),jobId.getOrElse("job_000"),0,"空",nullCount.getOrElse(0),nullPercent,checktime)
+    var valStr = (taskName.getOrElse("dataquality"),jobId.getOrElse("job_000"),1,"合格",validCount.getOrElse(0),validPercent,ts)
+    var invalstr = (taskName.getOrElse("dataquality"),jobId.getOrElse("job_000"),0,"不合格",invalidCount.getOrElse(0),invalidPercent,ts)
+    var nullStr = (taskName.getOrElse("dataquality"),jobId.getOrElse("job_000"),0,"空",nullCount.getOrElse(0),nullPercent,ts)
 
     val sc = sparkSession.sparkContext
     val resultRdd = sc.parallelize(Array(valStr,invalstr,nullStr))
@@ -113,17 +109,17 @@ object DataCheck {
         StructField("check_type", StringType, false),
         StructField("count", IntegerType, false),
         StructField("percent", IntegerType, false),
-        StructField("check_time",StringType,false)
+        StructField("check_time",TimestampType,false)
       )
     )
 
     val rowRDD = resultRdd.map(p => Row(p._1,p._2,p._3,p._4,p._5,p._6,p._7))
-    val personDataFrame = sparkSession.sqlContext.createDataFrame(rowRDD, schema)
+    val resultDataFrame = sparkSession.sqlContext.createDataFrame(rowRDD, schema)
 
     val prop = new Properties()
     prop.put("user",user )
     prop.put("password", passwd)
-    personDataFrame.write.mode("append").jdbc(urlDestDB,statisticsTable,prop)
+    resultDataFrame.write.mode("append").jdbc(urlDestDB,statisticsTable,prop)
 
   }
 
