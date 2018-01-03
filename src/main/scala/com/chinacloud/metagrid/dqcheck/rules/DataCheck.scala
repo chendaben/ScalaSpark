@@ -2,8 +2,7 @@
   * Created by aseara on 2017/6/1.
   */
 
-package com.chinacloud.metagrid
-
+package com.chinacloud.metagrid.dqcheck.rules
 
 import java.sql.Timestamp
 import java.text.SimpleDateFormat
@@ -34,6 +33,15 @@ object DataCheck {
       var detailsTable = args(6)
       var userDest = args(7)
       var passwdDest= args(8)
+      println("输入正则表达式为：" + reg)
+      println("任务名称为：" + taskName)
+      println("查询的表名为：" + table)
+      println("检测的字段为：" + filed)
+      println("结果数据库URL为：" + urlDest)
+      println("宏观统计结果输出表为：" + statisticsTable)
+      println("不合格数据录入表为：" + detailsTable)
+      println("结果数据库用户名为：" + userDest)
+      println("结果数据库密码为：" + passwdDest)
 
 //一下参数只针对于宏观数据统计
 //    var reg = args(0)
@@ -50,7 +58,7 @@ object DataCheck {
       .appName(taskName)
       .enableHiveSupport()
       .getOrCreate()
-
+    println("--------字段合法性检测开始")
     //获取JobId
     var jobId = sparksession.sparkContext.applicationId
     var sql:String = "select * from" +" "+ table
@@ -60,16 +68,21 @@ object DataCheck {
 //    var srcdata = dataFrame.select("*")
 
     //读取hive数据库
+    println("--------开始读取数据表信息")
     val srcdata = sparksession.sql(sql)
-
+    println("--------读取数据表信息完成")
     var resultMap = regualateForMacro(reg,srcdata,filed);
     resultMap +=("taskName"->taskName)
     resultMap +=("jobId"->jobId)
+
     writeMacroResultToMysql(sparksession,resultMap,urlDest,statisticsTable,userDest,passwdDest)
+    println("--------宏观统计数据写入数据库完成")
 
     var dataList:collection.mutable.ListBuffer[String] = regualateForDetail(reg,srcdata,filed)
     writedetailResultToMysql(sparksession,taskName,jobId,dataList,urlDest,detailsTable,userDest,passwdDest)
+    println("--------不合格信息写入数据库完成")
 
+    println("--------字段合法性检测完成")
     sparksession.stop()
 
   }
@@ -192,7 +205,7 @@ object DataCheck {
     */
   def regualateForDetail(regx:String,dataFrame: DataFrame,filed:String): collection.mutable.ListBuffer[String] =
   {
-
+    println("--------开始录入不合格数据")
     var invalidexample: collection.mutable.ListBuffer[String] = collection.mutable.ListBuffer[String]()
     var totalCount = dataFrame.count()
     var columsList = dataFrame.columns.toList
@@ -222,7 +235,7 @@ object DataCheck {
           }
         }
     })
-
+    println("--------不合格数据录入完成")
     return invalidexample
   }
 
@@ -235,6 +248,7 @@ object DataCheck {
     */
   def regualateForMacro(regx:String,dataFrame: DataFrame,filed:String):Map[String,Any] =
   {
+    println("--------开始宏观数据统计")
     var invalidexample: collection.mutable.ListBuffer[String] = collection.mutable.ListBuffer[String]()
     var invalidCount = 0
     var validCount = 0
@@ -272,7 +286,7 @@ object DataCheck {
     result += ("nullCount" -> nullCount.toString)
     result += ("inValidCount" -> invalidCount.toString)
     result += ("validCount" -> validCount.toString)
-
+    println("--------宏观数据统计完成")
     return result;
   }
 
