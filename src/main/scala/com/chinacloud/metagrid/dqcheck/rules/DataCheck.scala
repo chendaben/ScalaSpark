@@ -1,26 +1,16 @@
-/**
-  * Created by aseara on 2017/6/1.
-  */
-
 package com.chinacloud.metagrid.dqcheck.rules
 
 import java.sql.Timestamp
-import java.text.SimpleDateFormat
-import java.util
-import java.util.{Date, Properties}
+import java.util.Properties
 
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
+import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, Row, SparkSession, types}
 import org.json4s.DefaultFormats
 import org.json4s.jackson.Json
-import org.json4s.jackson.Serialization.{read, write}
-
 
 /**
-  * Created by qiujingde on 2017/5/31.
-  * spark 集群测试1：随机点计算圆周率
+  * Created by root on 18-1-11.
   */
 object DataCheck {
     def main(args: Array[String]) {
@@ -45,29 +35,30 @@ object DataCheck {
         println("结果数据库用户名为：" + userDest)
         println("结果数据库密码为：" + passwdDest)
 
-        //一下参数只针对于宏观数据统计
-        //    var reg = args(0)
-        //    var taskName = args(1)
-        //    var table = args(2)
-        //    var filed = args(3)
-        //    var urlDest = args(4)
-        //    var statisticsTable = args(5)
-        //    var userDest = args(6)
-        //    var passwdDest= args(7)
+        //测试数据
+        //        val urlSrc = urlDest
+        //        val userSrc = userDest
+        //        val passwdSrc = passwdDest
+        //        val srctable = "guan_data.record"
+
+
+
 
         val sparksession = SparkSession
-            .builder
-            .appName(taskName)
-            .enableHiveSupport()
-            .getOrCreate()
+          .builder
+          .appName(taskName)
+          .enableHiveSupport()
+          .getOrCreate()
+
         println("--------字段合法性检测开始")
+
         //获取JobId
         var jobId = sparksession.sparkContext.applicationId
         var sql: String = "select * from" + " " + table
 
-        //读取Mysql数据库
-        //    val dataFrame = readMysqlTable(sparksession,urlSrc,table,userSrc,passwdSrc)
-        //    var srcdata = dataFrame.select("*")
+        //        读取Mysql数据库
+        //        val dataFrame = readMysqlTable(sparksession,urlSrc,srctable,userSrc,passwdSrc)
+        //        var srcdata = dataFrame.select("*")
 
         //读取hive数据库
         println("--------开始读取数据表信息")
@@ -148,30 +139,35 @@ object DataCheck {
       * @param passwd
       */
     def writeMacroResultToMysql(sparkSession: SparkSession, resultMap: Map[String, Any], urlDestDB: String, statisticsTable: String, user: String, passwd: String): Unit = {
-        var dataLength = resultMap.get("totalCount").map(f => {
-            f.toString.toInt
-        }).getOrElse(8888)
         var taskName = resultMap.get("taskName")
         var jobId = resultMap.get("jobId")
-        var validCount = resultMap.get("validCount").map(f => {
-            f.toString.toInt
-        })
-        var nullCount = resultMap.get("nullCount").map(f => {
-            f.toString.toInt
-        })
-        var invalidCount = resultMap.get("inValidCount").map(f => {
-            f.toString.toInt
-        })
 
-        var validPercent = validCount.getOrElse(0) * 10000 / dataLength
-        var invalidPercent = invalidCount.getOrElse(0) * 10000 / dataLength
-        var nullPercent = nullCount.getOrElse(0) * 10000 / dataLength
+        var dataLength:Long = resultMap.get("totalCount").map(f => {
+            f.toString.toLong
+        }).getOrElse(0)
+
+        var validCount:Long = resultMap.get("validCount").map(f => {
+            f.toString.toLong
+        }).getOrElse(0)
+
+        var nullCount:Long  = resultMap.get("nullCount").map(f => {
+            f.toString.toLong
+        }).getOrElse(0)
+
+        var invalidCount:Long  = resultMap.get("inValidCount").map(f => {
+            f.toString.toLong
+        }).getOrElse(0)
+
+
+        var validPercent = (validCount * 10000 / dataLength).toInt
+        var invalidPercent = (invalidCount * 10000 / dataLength).toInt
+        var nullPercent = (nullCount * 10000 / dataLength).toInt
 
         var ts = new Timestamp(System.currentTimeMillis())
 
-        var valStr = (taskName.getOrElse("dataquality"), jobId.getOrElse("job_000"), 1, "合格", validCount.getOrElse(0), validPercent, ts)
-        var invalstr = (taskName.getOrElse("dataquality"), jobId.getOrElse("job_000"), 0, "不合格", invalidCount.getOrElse(0), invalidPercent, ts)
-        var nullStr = (taskName.getOrElse("dataquality"), jobId.getOrElse("job_000"), 0, "空", nullCount.getOrElse(0), nullPercent, ts)
+        var valStr = (taskName.getOrElse("dataquality"), jobId.getOrElse("job_000"), 1, "合格", validCount, validPercent, ts)
+        var invalstr = (taskName.getOrElse("dataquality"), jobId.getOrElse("job_000"), 0, "不合格", invalidCount, invalidPercent, ts)
+        var nullStr = (taskName.getOrElse("dataquality"), jobId.getOrElse("job_000"), 0, "空", nullCount, nullPercent, ts)
 
         val sc = sparkSession.sparkContext
         val resultRdd = sc.parallelize(Array(valStr, invalstr, nullStr))
@@ -182,7 +178,7 @@ object DataCheck {
                 StructField("job_id", StringType, false),
                 StructField("is_valid", IntegerType, false),
                 StructField("check_type", StringType, false),
-                StructField("count", IntegerType, false),
+                StructField("count", LongType, false),
                 StructField("percent", IntegerType, false),
                 StructField("check_time", TimestampType, false)
             )
@@ -208,24 +204,31 @@ object DataCheck {
         var nullCount = 0
         var result: Map[String, Any] = Map()
         var columsList = dataFrame.columns.toList
-
+        var ret: List[String] = List()
 
         var totalCount = dataFrame.count()
-
         val intermediate_data: RDD[List[String]] = dataFrame.rdd.map(f => {
-            var data = f.getAs[String](filed)
-            var ret: List[String] = List()
-            if (data == null || data.equals("")) {
-                ret = List("empty") ::: f.toSeq.toList.map(r=>r.toString)
+            var index = f.fieldIndex(filed)
+
+            var isNull = f.isNullAt(index)
+            if(isNull == true || f.get(index).equals(""))
+            {
+                ret = List("empty") ::: f.toSeq.toList.map(r=>{if (r != null) r.toString else ""})
             }
-            else {
+            else
+            {
+                var data = f.get(index).toString
+
                 val isvlid = data.matches(regx)
-                if (isvlid == true) {
-                    ret = List("valid") ::: f.toSeq.toList.map(r=>r.toString)
+                if (isvlid == true)
+                {
+                    ret = List("valid") ::: f.toSeq.toList.map(r=>{if (r != null) r.toString else ""})
                 }
-                else {
-                    ret = List("invalid") ::: f.toSeq.toList.map(r=>r.toString)
+                else
+                {
+                    ret = List("invalid") ::: f.toSeq.toList.map(r=>{if (r != null) r.toString else ""})
                 }
+
             }
             ret
         })
@@ -240,18 +243,18 @@ object DataCheck {
         println(result)
         println("--------宏观数据统计完成")
 
-
-        val content_data:RDD[List[String]] = intermediate_data.map(r=>r.takeRight(r.length-1))
-        val sample_data: Array[List[String]] = content_data.take(10)
+        val filtered_data:RDD[List[String]] = intermediate_data.filter(list => {
+            list(0).equals("invalid")
+        })
+        val content_data:RDD[List[String]] = filtered_data.map(r=>r.takeRight(r.length-1))
+        val sample_data: Array[List[String]] = content_data.take(100)
         sample_data.foreach(r=>{
             val line = (columsList zip r).toMap
             invalidexample += Json(DefaultFormats).write(line)
         })
 
-
         println("done")
         println(invalidexample)
-
 
         return (result, invalidexample);
     }
