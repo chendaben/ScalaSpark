@@ -10,21 +10,23 @@ import org.json4s.DefaultFormats
 import org.json4s.jackson.Json
 
 /**
+  * 正则表达式规则
   * Created by root on 18-1-11.
   */
 object DataCheck {
     def main(args: Array[String]) {
 
-        //宏观数据和不符合数据样本
-        var reg = args(0)
-        var taskName = args(1)
-        var table = args(2)
-        var filed = args(3)
-        var urlDest = args(4)
-        var statisticsTable = args(5)
-        var detailsTable = args(6)
-        var userDest = args(7)
-        var passwdDest = args(8)
+        //传入参数
+        val reg = args(0)
+        val taskName = args(1)
+        val table = args(2)
+        val filed = args(3)
+        val urlDest = args(4)
+        val statisticsTable = args(5)
+        val detailsTable = args(6)
+        val userDest = args(7)
+        val passwdDest = args(8)
+
         println("输入正则表达式为：" + reg)
         println("任务名称为：" + taskName)
         println("查询的表名为：" + table)
@@ -35,16 +37,7 @@ object DataCheck {
         println("结果数据库用户名为：" + userDest)
         println("结果数据库密码为：" + passwdDest)
 
-        //测试数据
-        //        val urlSrc = urlDest
-        //        val userSrc = userDest
-        //        val passwdSrc = passwdDest
-        //        val srctable = "guan_data.record"
-
-
-
-
-        val sparksession = SparkSession
+        val sparkSession = SparkSession
           .builder
           .appName(taskName)
           .enableHiveSupport()
@@ -53,56 +46,52 @@ object DataCheck {
         println("--------字段合法性检测开始")
 
         //获取JobId
-        var jobId = sparksession.sparkContext.applicationId
-        var sql: String = "select * from" + " " + table
-
-        //        读取Mysql数据库
-        //        val dataFrame = readMysqlTable(sparksession,urlSrc,srctable,userSrc,passwdSrc)
-        //        var srcdata = dataFrame.select("*")
+        val jobId = sparkSession.sparkContext.applicationId
 
         //读取hive数据库
         println("--------开始读取数据表信息")
-        val srcdata = sparksession.sql(sql)
+        val sql = "select * from" + " " + table
+        val srcdata = sparkSession.sql(sql)
         println("--------读取数据表信息完成")
+
+
         var (resultMap: Map[String, Any], dataList: collection.mutable.ListBuffer[String]) = regulate(reg, srcdata, filed);
         resultMap += ("taskName" -> taskName)
         resultMap += ("jobId" -> jobId)
 
-        writeMacroResultToMysql(sparksession, resultMap, urlDest, statisticsTable, userDest, passwdDest)
+
+        println("--------开始宏观统计数据写入数据库")
+        writeMacroResultToMysql(sparkSession, resultMap, urlDest, statisticsTable, userDest, passwdDest)
         println("--------宏观统计数据写入数据库完成")
 
-        //val errorData = sparksession.sql("select * from " + table + " where not REGEXP_LIKE(" + filed + ", " + reg + ") limit ")
-        //var dataList: collection.mutable.ListBuffer[String] = regualateForDetail(reg, srcdata, filed)
-        writedetailResultToMysql(sparksession, taskName, jobId, dataList, urlDest, detailsTable, userDest, passwdDest)
+
+        println("--------开始写入不合格信息到数据库")
+        writedetailResultToMysql(sparkSession, taskName, jobId, dataList, urlDest, detailsTable, userDest, passwdDest)
         println("--------不合格信息写入数据库完成")
 
         println("--------字段合法性检测完成")
-        sparksession.stop()
+        sparkSession.stop()
 
     }
 
     /**
-      * 将不合格数据写入数据表
+      * 将不合格数据样列数据写入数据库
       *
       * @param session
-      * @param taskName
-      * @param jobId
+      * @param taskName 任务名称
+      * @param jobId 任务ID
       * @param resultDetails
-      * @param urlDestDB
-      * @param detailTable
-      * @param user
-      * @param passwd
+      * @param urlDestDB 数据库url
+      * @param detailTable 存入数据的表名
+      * @param user 用户名
+      * @param passwd 密码
       */
     def writedetailResultToMysql(session: SparkSession, taskName: String, jobId: String, resultDetails: collection.mutable.ListBuffer[String], urlDestDB: String, detailTable: String, user: String, passwd: String): Unit = {
 
         var invalidexample: collection.mutable.ListBuffer[(String, String, String)] = collection.mutable.ListBuffer[(String, String, String)]()
 
-        var vtaskName = taskName
-        var vjobId = jobId
-        var dataList = resultDetails
-
-        for (element <- dataList) {
-            var dataStr = (vtaskName.toString, vjobId.toString, element.toString)
+        for (element <- resultDetails) {
+            var dataStr = (taskName.toString, jobId.toString, element.toString)
             invalidexample += dataStr
         }
 
@@ -129,45 +118,45 @@ object DataCheck {
     }
 
     /**
-      * 讲宏观结果数据写入数据表
+      * 宏观结果数据写入数据库
       *
       * @param sparkSession
       * @param resultMap
-      * @param urlDestDB
-      * @param statisticsTable
-      * @param user
-      * @param passwd
+      * @param urlDestDB 数据库url
+      * @param statisticsTable 表名
+      * @param user 用户名
+      * @param passwd 密码
       */
     def writeMacroResultToMysql(sparkSession: SparkSession, resultMap: Map[String, Any], urlDestDB: String, statisticsTable: String, user: String, passwd: String): Unit = {
-        var taskName = resultMap.get("taskName")
-        var jobId = resultMap.get("jobId")
+        val taskName = resultMap.get("taskName")
+        val jobId = resultMap.get("jobId")
 
-        var dataLength:Long = resultMap.get("totalCount").map(f => {
+        val dataLength:Long = resultMap.get("totalCount").map(f => {
             f.toString.toLong
         }).getOrElse(0)
 
-        var validCount:Long = resultMap.get("validCount").map(f => {
+        val validCount:Long = resultMap.get("validCount").map(f => {
             f.toString.toLong
         }).getOrElse(0)
 
-        var nullCount:Long  = resultMap.get("nullCount").map(f => {
+        val nullCount:Long  = resultMap.get("nullCount").map(f => {
             f.toString.toLong
         }).getOrElse(0)
 
-        var invalidCount:Long  = resultMap.get("inValidCount").map(f => {
+        val invalidCount:Long  = resultMap.get("inValidCount").map(f => {
             f.toString.toLong
         }).getOrElse(0)
 
 
-        var validPercent = (validCount * 10000 / dataLength).toInt
-        var invalidPercent = (invalidCount * 10000 / dataLength).toInt
-        var nullPercent = (nullCount * 10000 / dataLength).toInt
+        val validPercent = (validCount * 10000 / dataLength).toInt
+        val invalidPercent = (invalidCount * 10000 / dataLength).toInt
+        val nullPercent = (nullCount * 10000 / dataLength).toInt
 
-        var ts = new Timestamp(System.currentTimeMillis())
+        val ts = new Timestamp(System.currentTimeMillis())
 
-        var valStr = (taskName.getOrElse("dataquality"), jobId.getOrElse("job_000"), 1, "合格", validCount, validPercent, ts)
-        var invalstr = (taskName.getOrElse("dataquality"), jobId.getOrElse("job_000"), 0, "不合格", invalidCount, invalidPercent, ts)
-        var nullStr = (taskName.getOrElse("dataquality"), jobId.getOrElse("job_000"), 0, "空", nullCount, nullPercent, ts)
+        val valStr = (taskName.getOrElse("dataquality"), jobId.getOrElse("job_000"), 1, "合格", validCount, validPercent, ts)
+        val invalstr = (taskName.getOrElse("dataquality"), jobId.getOrElse("job_000"), 0, "不合格", invalidCount, invalidPercent, ts)
+        val nullStr = (taskName.getOrElse("dataquality"), jobId.getOrElse("job_000"), 0, "空", nullCount, nullPercent, ts)
 
         val sc = sparkSession.sparkContext
         val resultRdd = sc.parallelize(Array(valStr, invalstr, nullStr))
@@ -195,20 +184,26 @@ object DataCheck {
     }
 
 
-
+  /**
+    * 宏观统计计算
+    * @param regx 正则表达式
+    * @param dataFrame
+    * @param filed 列名
+    * @return
+    */
     def regulate(regx: String, dataFrame: DataFrame, filed: String): (Map[String, Any], collection.mutable.ListBuffer[String]) = {
-        println("--------开始宏观数据统计")
+        println("--------开始统计数据计算")
         var invalidexample: collection.mutable.ListBuffer[String] = collection.mutable.ListBuffer[String]()
-        var invalidCount = 0
-        var validCount = 0
-        var nullCount = 0
+//        var invalidCount = 0
+//        var validCount = 0
+//        var nullCount = 0
         var result: Map[String, Any] = Map()
-        var columsList = dataFrame.columns.toList
+        val columsList = dataFrame.columns.toList
         var ret: List[String] = List()
 
-        var totalCount = dataFrame.count()
+        val totalCount = dataFrame.count()
         val intermediate_data: RDD[List[String]] = dataFrame.rdd.map(f => {
-            var index = f.fieldIndex(filed)
+            val index = f.fieldIndex(filed)
 
             var isNull = f.isNullAt(index)
             if(isNull == true || f.get(index).equals(""))
@@ -217,7 +212,7 @@ object DataCheck {
             }
             else
             {
-                var data = f.get(index).toString
+                val data = f.get(index).toString
 
                 val isvlid = data.matches(regx)
                 if (isvlid == true)
@@ -259,30 +254,5 @@ object DataCheck {
         return (result, invalidexample);
     }
 
-
-    /**
-      * 读取Mysql数据库，返回dataframe
-      *
-      * @param ss
-      * @param url
-      * @param dbtable
-      * @param user
-      * @param password
-      * @return
-      */
-    def readMysqlTable(ss: SparkSession, url: String, dbtable: String, user: String, password: String): org.apache.spark.sql.DataFrame = {
-
-        val driver = "com.mysql.jdbc.Driver"
-
-        val dataFrame = ss.read.format("jdbc").options(Map("url" -> url,
-            "driver" -> driver,
-            "dbtable" -> dbtable,
-            "user" -> user,
-            "password" -> password)).load()
-        println("连接数据库成功")
-
-        return dataFrame
-
-    }
 
 }

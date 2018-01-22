@@ -4,7 +4,7 @@
 		module="data_quality_check-build"
 		revision="0.1-SNAPSHOT"
 		status="integration"
-		publication="20180111185447"
+		publication="20180122104842"
 		e:sbtVersion="0.13" e:scalaVersion="2.10"
 	>
 		<description>
