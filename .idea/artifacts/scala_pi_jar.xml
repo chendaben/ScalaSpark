@@ -1,8 +1,0 @@
-<component name="ArtifactManager">
-  <artifact type="jar" build-on-make="true" name="scala-pi:jar">
-    <output-path>$PROJECT_DIR$/out/artifacts/scala_pi_jar</output-path>
-    <root id="archive" name="scala-pi.jar">
-      <element id="module-output" name="scala-pi" />
-    </root>
-  </artifact>
-</component>

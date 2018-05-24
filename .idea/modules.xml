@@ -2,8 +2,8 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/data_quality_check.iml" filepath="$PROJECT_DIR$/.idea/modules/data_quality_check.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/data_quality_check-build.iml" filepath="$PROJECT_DIR$/.idea/modules/data_quality_check-build.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/spark-learn-scala.iml" filepath="$PROJECT_DIR$/.idea/modules/spark-learn-scala.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/spark-learn-scala-build.iml" filepath="$PROJECT_DIR$/.idea/modules/spark-learn-scala-build.iml" />
     </modules>
   </component>
 </project>

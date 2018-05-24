@@ -27,6 +27,17 @@ object DataCheck {
         val userDest = args(7)
         val passwdDest = args(8)
 
+//        val reg = args(0)
+//        val taskName = "RegTestData"
+//        val table = args(2)
+//        val filed = "name"
+//        val urlDest = args(4)
+//        val statisticsTable = args(5)
+//        val detailsTable = args(6)
+//        val userDest = args(7)
+//        val passwdDest = args(8)
+
+
         println("输入正则表达式为：" + reg)
         println("任务名称为：" + taskName)
         println("查询的表名为：" + table)
@@ -50,7 +61,7 @@ object DataCheck {
 
         //读取hive数据库
         println("--------开始读取数据表信息")
-        val sql = "select * from" + " " + table
+        val sql = "select * from " +table
         val srcdata = sparkSession.sql(sql)
         println("--------读取数据表信息完成")
 
@@ -191,24 +202,30 @@ object DataCheck {
     * @param filed 列名
     * @return
     */
-    def regulate(regx: String, dataFrame: DataFrame, filed: String): (Map[String, Any], collection.mutable.ListBuffer[String]) = {
-        println("--------开始统计数据计算")
-        var invalidexample: collection.mutable.ListBuffer[String] = collection.mutable.ListBuffer[String]()
-//        var invalidCount = 0
-//        var validCount = 0
-//        var nullCount = 0
-        var result: Map[String, Any] = Map()
-        val columsList = dataFrame.columns.toList
-        var ret: List[String] = List()
+    def regulate(regx: String, dataFrame: DataFrame, filed: String,sparkSession: SparkSession): (Map[String, Any], collection.mutable.ListBuffer[String]) = {
+        //测试练习代码begin
+        dataFrame.map(line =>line.getString(0))
 
+        //测试练习代码end
+
+        println("--------开始统计数据计算")
+        var invalidExample: collection.mutable.ListBuffer[String] = collection.mutable.ListBuffer[String]()
+        var result: Map[String, Any] = Map()
+        var ret: List[String] = List()
+        //查询dataframe中的schema
+        val columsList = dataFrame.columns.toList
+
+        //查询表中记录总数
         val totalCount = dataFrame.count()
         val intermediate_data: RDD[List[String]] = dataFrame.rdd.map(f => {
-            val index = f.fieldIndex(filed)
+            val fList=f.toSeq.toList.map(r=>{if (r != null) r.toString else ""})
 
-            var isNull = f.isNullAt(index)
+            //查询字段的索引
+            val index = f.fieldIndex(filed)
+            val isNull = f.isNullAt(index)
             if(isNull == true || f.get(index).equals(""))
             {
-                ret = List("empty") ::: f.toSeq.toList.map(r=>{if (r != null) r.toString else ""})
+                ret = List("empty") ::: fList
             }
             else
             {
@@ -217,20 +234,19 @@ object DataCheck {
                 val isvlid = data.matches(regx)
                 if (isvlid == true)
                 {
-                    ret = List("valid") ::: f.toSeq.toList.map(r=>{if (r != null) r.toString else ""})
+                    ret = List("valid") ::: fList
                 }
                 else
                 {
-                    ret = List("invalid") ::: f.toSeq.toList.map(r=>{if (r != null) r.toString else ""})
+                    ret = List("invalid") ::: fList
                 }
 
             }
             ret
         })
-
+        println("map函数完成")
         val result_data = intermediate_data.map(r=> r(0)).countByValue()
         println(result_data)
-
         result += ("totalCount" -> totalCount.toString)
         result += ("nullCount" -> (if(result_data.get("empty") != None) result_data.get("empty").get.toString else 0))
         result += ("inValidCount" -> (if(result_data.get("invalid") != None) result_data.get("invalid").get.toString else 0))
@@ -245,14 +261,24 @@ object DataCheck {
         val sample_data: Array[List[String]] = content_data.take(100)
         sample_data.foreach(r=>{
             val line = (columsList zip r).toMap
-            invalidexample += Json(DefaultFormats).write(line)
+            invalidExample += Json(DefaultFormats).write(line)
         })
 
         println("done")
-        println(invalidexample)
+        println(invalidExample)
 
-        return (result, invalidexample);
+        return (result, invalidExample);
     }
+
+
+//    def regulate1(regx: String, dataFrame: DataFrame, filed: String): Unit ={
+//        //计算总记录数
+//        val totalCount = dataFrame.count()
+//        //遍历dataframe计算空值，合法值，不合法值
+//        dataFrame.map(f=>{
+//
+//        })
+//    }
 
 
 }
